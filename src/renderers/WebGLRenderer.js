@@ -2275,15 +2275,11 @@ function WebGLRenderer( parameters ) {
 		uniforms.clearCoat.value = material.clearCoat;
 		uniforms.clearCoatRoughness.value = material.clearCoatRoughness;
 
-		if ( material.normalMap || material.clearCoatNormalMap ) {
-
-			if ( material.clearCoatNormalMap ) {
-
-				uniforms.clearCoatNormalMap.value = material.clearCoatNormalMap;
-
-			}
+		if ( material.clearCoatNormalMap ) {
 
 			uniforms.clearCoatNormalScale.value.copy( material.clearCoatNormalScale );
+			uniforms.clearCoatNormalMap.value = material.clearCoatNormalMap;
+
 			if ( material.side === BackSide ) {
 
 				uniforms.clearCoatNormalScale.value.negate();

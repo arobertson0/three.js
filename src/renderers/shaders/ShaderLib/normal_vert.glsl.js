@@ -1,4 +1,4 @@
-export default /* glsl */ `
+export default /* glsl */`
 #define NORMAL
 
 #if defined( FLAT_SHADED ) || defined( USE_BUMPMAP ) || ( defined( USE_NORMALMAP ) && ! defined( OBJECTSPACE_NORMALMAP ) ) || defined( USE_CLEARCOAT_NORMALMAP )

@@ -1,4 +1,4 @@
-export default /* glsl */ `
+export default /* glsl */`
 #define PI 3.14159265359
 #define PI2 6.28318530718
 #define PI_HALF 1.5707963267949
@@ -40,13 +40,11 @@ struct GeometricContext {
 	vec3 normal;
 	vec3 viewDir;
 
-	#ifndef STANDARD
-		#ifdef USE_CLEARCOAT_NORMALMAP
+	#ifdef USE_CLEARCOAT_NORMALMAP
 
-			vec3 clearCoatNormal;
-			
-		#endif
-  #endif
+		vec3 clearCoatNormal;
+
+	#endif
 };
 
 vec3 transformDirection( in vec3 dir, in mat4 matrix ) {
