@@ -27,371 +27,420 @@
 	<script type="module">
 
 		import * as THREE from '../build/three.module.js';
+		import * as Nodes from './jsm/nodes/Nodes.js';
 
 		import Stats from './jsm/libs/stats.module.js';
 
 		import { GUI } from './jsm/libs/dat.gui.module.js';
 
 		import { OrbitControls } from './jsm/controls/OrbitControls.js';
-		import { HDRCubeTextureLoader } from './jsm/loaders/HDRCubeTextureLoader.js';
-		import { PMREMGenerator } from './jsm/pmrem/PMREMGenerator.js';
-		import { PMREMCubeUVPacker } from './jsm/pmrem/PMREMCubeUVPacker.js';
 
-		var container, stats;
-
-		var camera, scene, renderer;
-
-		var guiParams = {
-			metalness: 0.0,
-			roughness: 1.0,
-			clearCoat: 1.0,
-			clearCoatRoughness: 0.0,
-			reflectivity: 0.0,
-		};
-
-		var guiNormalMapNames = [
-			"face",
-			"tentacle"
+		const notVaried = [
+			'metalness',
+			'roughness',
+			'reflectivity',
+			'clearCoat',
+			'clearCoatRoughness',
 		];
 
-		var guiMatParams = {
-			normalMap: "face",
-			normalScale: 1.0,
-			clearCoatNormalMap: "tentacle",
-			clearCoatNormalScale: 1.0,
+		const noVar = {
+			legacy: () => { },
+			node: () => { }
 		};
 
-		var particleLight;
-		var meshes = [];
-		var mats = [];
-		var normalMaps = {};
+		const clearCoatMapVariations =
+		{
+			legacy: (mat, matModel) => {
+				mat.clearCoatNormalScale = matModel.clearCoatNormalScale;
 
-		const sphereSize = 80;
-		const sphereSpacing = 1.25 * sphereSize * 2;
+				if (mat.clearCoatNormalMap !== matModel.clearCoatNormalMap) {
 
-		const variationsX = [
-			( mat, scale, map ) => { },
-			( mat, scale, map ) => {
-
-				mat.clearCoatNormalScale = new THREE.Vector2( scale, scale );
-				if ( mat.clearCoatNormalMap !== map ) {
-
-					mat.clearCoatNormalMap = map;
+					mat.clearCoatNormalMap = matModel.clearCoatNormalMap;
 					mat.needsUpdate = true;
 
 				}
-
 			},
-		];
+			node: (nodeMat, nodes) => {
+				nodeMat.clearCoatNormal = new Nodes.NormalMapNode(
+					nodes.clearCoatNormalMap,
+					nodes.clearCoatNormalScale
+				);
+			}
+		};
 
-		const variationsY = [
-			( mat, scale, map ) => { },
-			( mat, scale, map ) => {
+		const mapVariation =
+		{
+			legacy: (mat, matModel) => {
+				mat.normalScale = matModel.normalScale;
 
-				mat.normalScale = new THREE.Vector2( scale, scale );
-				if ( mat.normalMap !== map ) {
+				if (mat.normalMap !== matModel.normalMap) {
 
-					mat.normalMap = map;
+					mat.normalMap = matModel.normalMap;
 					mat.needsUpdate = true;
 
 				}
-
 			},
-		];
+			node: (nodeMat, nodes) => {
+				nodeMat.normal = new Nodes.NormalMapNode(
+					nodes.normalMap,
+					nodes.normalScale
+				);
+			}
+		};
 
-		const maxI = variationsX.length;
-		const maxJ = variationsY.length;
+		const variationDescs = [];
+
+		for (let x = 0; x < 2; x++) {
+			for (let y = 0; y < 2; y++) {
+				variationDescs.push(
+					{
+						pos: new THREE.Vector3(x - 0.5, y - 0.5, 0),
+						selectors: [
+							y ? mapVariation : noVar,
+							x ? clearCoatMapVariations : noVar,
+						]
+					}
+				);
+			}
+		}
 
 		new THREE.FontLoader()
-			.load( 'fonts/gentilis_regular.typeface.json',
-				function ( font ) {
-
-					init( font );
-					animate();
-
+			.load(
+				'fonts/gentilis_regular.typeface.json',
+				font => {
+					new THREE.CubeTextureLoader()
+						.load(
+							genCubeUrls('./textures/cube/Park2/', '.jpg'),
+							cubeMap => { initVariationScenes(variationDescs, font, cubeMap); }
+						)
 				}
 			);
 
+		function initVariationScenes(variationDescs, font, cubeMap) {
 
-		function init( font ) {
+			const container = document.createElement('div');
+			document.body.appendChild(container);
 
-			container = document.createElement( 'div' );
-			document.body.appendChild( container );
+			const scene = new THREE.Scene();
+			scene.background = cubeMap;
 
-			camera = new THREE.PerspectiveCamera( 27, window.innerWidth / window.innerHeight, 1, 10000 );
-			camera.position.z = 1500;
+			const stats = new Stats();
+			container.appendChild(stats.dom);
 
-			var genCubeUrls = function ( prefix, postfix ) {
+			const { camera, renderer } = initRendering(scene, container);
 
-				return [
-					prefix + 'px' + postfix, prefix + 'nx' + postfix,
-					prefix + 'py' + postfix, prefix + 'ny' + postfix,
-					prefix + 'pz' + postfix, prefix + 'nz' + postfix
-				];
+			const textures = loadTextures();
 
+			const nodes = {
+				//bias: new Nodes.FloatNode(1.0),
+				metalness: new Nodes.FloatNode(0.0),
+				roughness: new Nodes.FloatNode(1.0),
+				reflectivity: new Nodes.FloatNode(0.0),
+				clearCoat: new Nodes.FloatNode(1.0),
+				clearCoatRoughness: new Nodes.FloatNode(0.0),
+				normalMap: new Nodes.TextureNode(textures.face),
+				normalScale: new Nodes.Vector2Node(1.0, 1.0),
+				clearCoatNormalMap: new Nodes.TextureNode(textures.tentacle),
+				clearCoatNormalScale: new Nodes.Vector2Node(1.0, 1.0)
 			};
 
-			scene = new THREE.Scene();
+			const primitives = initVariationPrimitives(scene, variationDescs, cubeMap, nodes);
 
-			var hdrUrls = genCubeUrls( './textures/cube/pisaHDR/', '.hdr' );
+			const particle = initLights(scene);
 
-			new HDRCubeTextureLoader()
-				.setType( THREE.UnsignedByteType )
-				.load( hdrUrls,
-					function ( hdrCubeMap ) {
+			const elements = {
+				primitives,
+				particle,
+				stats,
+				nodes,
+			};
 
-						var pmremGenerator = new PMREMGenerator( hdrCubeMap );
-						pmremGenerator.update( renderer );
+			const getMatModel = setupGui(textures);
 
-						var pmremCubeUVPacker = new PMREMCubeUVPacker( pmremGenerator.cubeLods );
-						pmremCubeUVPacker.update( renderer );
+			startAnim(elements, getMatModel, renderer, scene, camera);
 
-						var hdrCubeRenderTarget = pmremCubeUVPacker.CubeUVRenderTarget;
+		}
 
-						var geometry = new THREE.SphereBufferGeometry( 80, 64, 32 );
+		function updateScene(elements, getMatModel) {
 
-						var textureLoader = new THREE.TextureLoader();
+			elements.stats.update();
 
-						normalMaps.tentacle = textureLoader
-							.load( "textures/nvidia_tentacle/tentacle_tangent_space.png" );
+			const matModel = getMatModel();
 
-						normalMaps.face = textureLoader
-							.load( "models/gltf/LeePerrySmith/Infinite-Level_02_Tangent_SmoothUV.jpg" );
+			// Update node values
+			for (var matElem in elements.nodes) {
+				const node = elements.nodes[matElem];
+				node.value = matModel[matElem];
+			}
 
+			// update primitives
+			for (var primitive of elements.primitives) {
 
-						var matParams = {
-							envMap: hdrCubeRenderTarget.texture,
-						};
-
-
-						for ( var ii = 0; ii < maxI; ii ++ ) {
-
-							if ( ! mats[ ii ] ) {
-
-								mats[ ii ] = [];
-
-							}
-
-							for ( var jj = 0; jj < maxJ; jj ++ ) {
-
-								var mat = mats[ ii ][ jj ] = new THREE.MeshPhysicalMaterial( matParams );
-
-								variationsX[ ii ]( mat, 1, normalMaps.tentacle );
-								variationsY[ jj ]( mat, 1, normalMaps.face );
-								var mesh = new THREE.Mesh( geometry, mat );
-								meshes.push( mesh );
-								mesh.position.x = ( ii - ( maxI - 1 ) / 2 ) * sphereSpacing;
-								mesh.position.y = ( jj - ( maxJ - 1 ) / 2 ) * sphereSpacing;
-								scene.add( mesh );
-
-							}
-
-						}
-
-						hdrCubeMap.magFilter = THREE.LinearFilter;
-						hdrCubeMap.needsUpdate = true;
-						scene.background = hdrCubeMap;
-
-						pmremGenerator.dispose();
-						pmremCubeUVPacker.dispose();
-
+				if (matModel.useNodes) {
+					if (primitive.mesh.material !== primitive.nodeMat) {
+						primitive.mesh.material = primitive.nodeMat;
 					}
-
-				);
-
-			function addLabel( name, location, fontSize ) {
-
-				fontSize = fontSize | 20;
-				var textGeo = new THREE.TextBufferGeometry( name,
-					{
-
-						font: font,
-						size: fontSize,
-						height: 1,
-						curveSegments: 1
-
+				} else {
+					if (primitive.mesh.material !== primitive.mat) {
+						primitive.mesh.material = primitive.mat;
 					}
-				);
+				}
 
-				var textMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff } );
-				var textMesh = new THREE.Mesh( textGeo, textMaterial );
+				primitive.mesh.rotation.y += 0.01;
 
-				// Center the bounding box on the specified position w/ translation of -half diagonal
-				textGeo.computeBoundingBox();
-				var bb = textGeo.boundingBox.clone();
-				var displace = bb.max.sub( bb.min ).divide( new THREE.Vector3( 2, 2, 2 ) );
+				// Update legacy material
+				for (var matElem of notVaried) {
+					primitive.mat[matElem] = matModel[matElem];
+				}
 
-				textMesh.position.copy( location.sub( displace ) );
-				scene.add( textMesh );
-
+				// Update legacy material variation
+				primitive.update(matModel);
 			}
 
+			var timer = Date.now() * 0.00025;
+			elements.particle.position.x = Math.sin(timer * 7) * 3;
+			elements.particle.position.y = Math.cos(timer * 5) * 4;
+			elements.particle.position.z = Math.cos(timer * 3) * 5;
+		}
 
-			addLabel( "Normal Map", new THREE.Vector3( -350, 0, 0 ), 30 );
-			addLabel( "None", new THREE.Vector3( -250, -100, 0 ) );
-			addLabel( "Map", new THREE.Vector3( -300, 100, 0 ) );
 
-			addLabel( "Clearcoat Normal Map", new THREE.Vector3( 0, 260, 0 ), 30 );
-			addLabel( "None", new THREE.Vector3( -100, 200, 0 ) );
-			addLabel( "Map", new THREE.Vector3( 100, 200, 0 ) );
 
-			// LIGHTS
 
-			particleLight = new THREE.Mesh( new THREE.SphereBufferGeometry( 4, 8, 8 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
-			scene.add( particleLight );
+		// 	function addLabel(name, location, fontSize) {
 
-			{
+		// 		fontSize = fontSize | 20;
+		// 		var textGeo = new THREE.TextBufferGeometry(name,
+		// 			{
 
-				var ambientLight = new THREE.AmbientLight( 0x444444 );
-				scene.add( ambientLight );
+		// 				font: font,
+		// 				size: fontSize,
+		// 				height: 1,
+		// 				curveSegments: 1
 
-			}
+		// 			}
+		// 		);
 
-			{
+		// 		var textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+		// 		var textMesh = new THREE.Mesh(textGeo, textMaterial);
 
-				var pointLight = new THREE.PointLight( 0xffffff, 1.25, 1000 );
-				particleLight.add( pointLight );
+		// 		// Center the bounding box on the specified position w/ translation of -half diagonal
+		// 		textGeo.computeBoundingBox();
+		// 		var bb = textGeo.boundingBox.clone();
+		// 		var displace = bb.max.sub(bb.min).divide(new THREE.Vector3(2, 2, 2));
 
-			}
+		// 		textMesh.position.copy(location.sub(displace));
+		// 		scene.add(textMesh);
 
-			{
+		// 	}
 
-				var directionalLight = new THREE.DirectionalLight( 0xffffff );
-				directionalLight.position.set( 1, - 0.5, - 1 );
-				scene.add( directionalLight );
+		function initRendering(scene, container) {
+			const camera = new THREE.PerspectiveCamera(27, window.innerWidth / window.innerHeight, 1, 10000);
+			camera.position.z = 20;
 
-			}
-
-			renderer = new THREE.WebGLRenderer();
-			renderer.setSize( window.innerWidth, window.innerHeight );
-			container.appendChild( renderer.domElement );
-
-			//
+			const renderer = new THREE.WebGLRenderer();
+			renderer.setSize(window.innerWidth, window.innerHeight);
 
 			renderer.gammaInput = true;
 			renderer.gammaOutput = true;
 
-			//
+			new OrbitControls(camera, renderer.domElement);
 
-			stats = new Stats();
-			container.appendChild( stats.dom );
+			window.addEventListener(
+				'resize',
+				() => {
 
-			// EVENTS
+					var width = window.innerWidth;
+					var height = window.innerHeight;
 
-			var controls = new OrbitControls( camera, renderer.domElement );
+					camera.aspect = width / height;
+					camera.updateProjectionMatrix();
 
-			window.addEventListener( 'resize', onWindowResize, false );
+					renderer.setSize(width, height);
+				},
+				false
+			);
+
+			container.appendChild(renderer.domElement);
+
+			return { camera, renderer };
+		};
+
+		function loadTextures() {
+			var textureLoader = new THREE.TextureLoader();
+			return {
+				face: textureLoader.load("models/gltf/LeePerrySmith/Infinite-Level_02_Tangent_SmoothUV.jpg"),
+				tentacle: textureLoader.load("textures/nvidia_tentacle/tentacle_tangent_space.png"),
+			}
+		};
+
+		function genCubeUrls(path, format) {
+
+			return [
+				path + 'posx' + format, path + 'negx' + format,
+				path + 'posy' + format, path + 'negy' + format,
+				path + 'posz' + format, path + 'negz' + format
+			];
+
+		};
+
+		function initVariationPrimitives(scene, variationDescs, cubeMap, nodes) {
+
+			const primitives = [];
+
+			const geometry = new THREE.SphereBufferGeometry(1, 64, 32);
+
+			for (let variation of variationDescs) {
+
+
+				const nodeMat = new Nodes.StandardNodeMaterial();
+
+				nodeMat.color = new Nodes.ColorNode(0x602020);
+				nodeMat.environment = new Nodes.CubeTextureNode(cubeMap, undefined, false /*nodes.bias*/);
+
+				for (var node of notVaried) {
+					nodeMat[node] = nodes[node];
+				}
+
+				for (var selector of variation.selectors) {
+					selector.node(nodeMat, nodes)
+				};
+
+				const mat = new THREE.MeshPhysicalMaterial({
+					color: new THREE.Color(0x602020),
+					envMap: cubeMap,
+					//visible:false,
+				});
+
+				const mesh = new THREE.Mesh(geometry, mat);
+				mesh.position.copy(variation.pos.multiply(new THREE.Vector3(2.5, 2.5, 2.5)));
+				scene.add(mesh);
+
+				const primitive = {
+					mesh,
+					mat,
+					nodeMat,
+					update: (matModel) => {
+						for (var selector of variation.selectors) {
+							selector.legacy(mat, matModel)
+						};
+					}
+				};
+
+				primitives.push(primitive);
+			}
+
+			return primitives;
+
+		}
+
+		function initLights(scene) {
+
+
+			var ambientLight = new THREE.AmbientLight(0x444444);
+			scene.add(ambientLight);
+
+			var pointLight = new THREE.PointLight(0xffffff, 1.25, 1000);
+			const particleLight = new THREE.Mesh(new THREE.SphereBufferGeometry(0.05, 4, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+			particleLight.add(pointLight);
+			scene.add(particleLight);
+
+
+			var directionalLight = new THREE.DirectionalLight(0xffffff);
+			directionalLight.position.set(-1, 0.5, 1);
+			scene.add(directionalLight);
+
+			return particleLight;
+
+		}
+
+		function setupGui(textures) {
+
+			const textureNames = [];
+
+			for (var texture in textures) {
+				textureNames.push(texture);
+			}
+
+			const guiControls = {
+
+				useNodes: true,
+				//bias: 1.0,
+				metalness: 1.0,
+				roughness: 0.0,
+				reflectivity: 0.0,
+				clearCoat: 0.0,
+				clearCoatRoughness: 0.0,
+				normalMap: "face",
+				normalScale: 1.0,
+				clearCoatNormalMap: "tentacle",
+				clearCoatNormalScale: 1.0,
+			};
+
 
 			var gui = new GUI();
-
+			gui.add(guiControls, 'useNodes');
 			{
 
-				var materialGui = gui.addFolder( 'Physical Material' );
-				materialGui.add( guiParams, 'metalness', 0, 1, 0.01 );
-				materialGui.add( guiParams, 'roughness', 0, 1, 0.01 );
-				materialGui.add( guiParams, 'reflectivity', 0, 1, 0.01 );
+				var materialGui = gui.addFolder('Physical Material');
+				//materialGui.add(guiControls, 'bias', -10, 10, 0.1);
+				materialGui.add(guiControls, 'metalness', 0, 1, 0.01);
+				materialGui.add(guiControls, 'roughness', 0, 1, 0.01);
+				materialGui.add(guiControls, 'reflectivity', 0, 1, 0.01);
 				materialGui.open();
 
 			}
 
 			{
 
-				var clearCoatGui = gui.addFolder( 'ClearCoat' );
-				clearCoatGui.add( guiParams, 'clearCoat', 0, 1, 0.01 );
-				clearCoatGui.add( guiParams, 'clearCoatRoughness', 0, 1, 0.01 );
+				var clearCoatGui = gui.addFolder('ClearCoat');
+				clearCoatGui.add(guiControls, 'clearCoat', 0, 1, 0.01);
+				clearCoatGui.add(guiControls, 'clearCoatRoughness', 0, 1, 0.01);
 				clearCoatGui.open();
 
 			}
 
 			{
-
-				var normalGui = gui.addFolder( 'Normal Maps' );
-				normalGui.add( guiMatParams, 'normalMap', guiNormalMapNames );
-				normalGui.add( guiMatParams, 'normalScale', 0, 1, 0.01 );
-				normalGui.add( guiMatParams, 'clearCoatNormalMap', guiNormalMapNames );
-				normalGui.add( guiMatParams, 'clearCoatNormalScale', 0, 1, 0.01 );
+				var normalGui = gui.addFolder('Normal Maps');
+				normalGui.add(guiControls, 'normalMap', textureNames);
+				normalGui.add(guiControls, 'normalScale', 0, 1, 0.01);
+				normalGui.add(guiControls, 'clearCoatNormalMap', textureNames);
+				normalGui.add(guiControls, 'clearCoatNormalScale', 0, 1, 0.01);
 				normalGui.open();
-
 			}
 
 			gui.open();
 
-		}
+			const controlTranslations = {
+				normalMap: (val) => textures[val],
+				clearCoatNormalMap: (val) => textures[val],
+				normalScale: (val) => new THREE.Vector2(val, val),
+				clearCoatNormalScale: (val) => new THREE.Vector2(val, val),
+			}
 
-		//
-
-		function onWindowResize() {
-
-			var width = window.innerWidth;
-			var height = window.innerHeight;
-
-			camera.aspect = width / height;
-			camera.updateProjectionMatrix();
-
-			renderer.setSize( width, height );
-
-		}
-
-		//
-
-		function animate() {
-
-			requestAnimationFrame( animate );
-
-			render();
-
-			stats.update();
-
-		}
-
-		function render() {
-
-			var matColor = new THREE.Color().setHSL( 0.0, 0.5, 0.25 );
-
-			for ( var ii = 0; ii < maxI; ii ++ ) {
-
-				if ( mats[ ii ] ) { // avoid exceptions on first render before materials are set. TODO: lauch animation only after setup
-
-					for ( var jj = 0; jj < maxJ; jj ++ ) {
-
-						var mat = mats[ ii ][ jj ];
-						mat.color = matColor;
-						for ( var matParam in guiParams ) {
-
-							mat[ matParam ] = guiParams[ matParam ];
-
-						}
-
-						var normalMap = normalMaps[ guiMatParams.normalMap ];
-						var clearCoatNormalMap = normalMaps[ guiMatParams.clearCoatNormalMap ];
-
-						variationsX[ ii ]( mat, guiMatParams.clearCoatNormalScale, clearCoatNormalMap );
-						variationsY[ jj ]( mat, guiMatParams.normalScale, normalMap );
-
-					}
-
+			return () => {
+				const matModel = {};
+				for (let control in guiControls) {
+					let translation = controlTranslations[control];
+					let val = guiControls[control];
+					matModel[control] = translation ? translation(val) : val;
 				}
 
-			}
-
-			var timer = Date.now() * 0.00025;
-			particleLight.position.x = Math.sin( timer * 7 ) * 300;
-			particleLight.position.y = Math.cos( timer * 5 ) * 400;
-			particleLight.position.z = Math.cos( timer * 3 ) * 300;
-
-
-			for ( var mesh of meshes ) {
-
-				mesh.rotation.y += 0.01;
-
-			}
-
-
-			renderer.render( scene, camera );
-
+				return matModel;
+			};
 		}
 
+
+		function startAnim(elements, getMatModel, renderer, scene, camera) {
+
+			function anim() {
+				updateScene(elements, getMatModel);
+				renderer.render(scene, camera);
+				requestAnimationFrame(anim);
+			}
+			anim();
+		}
 
 	</script>
 </body>
+
 </html>

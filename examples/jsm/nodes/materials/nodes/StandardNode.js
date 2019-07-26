@@ -32,6 +32,12 @@ StandardNode.prototype.build = function ( builder ) {
 
 	builder.define( this.clearCoat || this.clearCoatRoughness ? 'PHYSICAL' : 'STANDARD' );
 
+	if( this.clearCoatNormal ){
+
+		builder.define('USE_CLEARCOAT_NORMALMAP');
+
+	}
+
 	builder.requires.lights = true;
 
 	builder.extensions.shaderTextureLOD = true;
@@ -143,6 +149,7 @@ StandardNode.prototype.build = function ( builder ) {
 
 		if ( this.clearCoat ) this.clearCoat.analyze( builder );
 		if ( this.clearCoatRoughness ) this.clearCoatRoughness.analyze( builder );
+		if ( this.clearCoatNormal ) this.clearCoatNormal.analyze( builder );
 
 		if ( this.reflectivity ) this.reflectivity.analyze( builder );
 
@@ -169,6 +176,7 @@ StandardNode.prototype.build = function ( builder ) {
 
 		var clearCoat = this.clearCoat ? this.clearCoat.flow( builder, 'f' ) : undefined;
 		var clearCoatRoughness = this.clearCoatRoughness ? this.clearCoatRoughness.flow( builder, 'f' ) : undefined;
+		var clearCoatNormal = this.clearCoatNormal ? this.clearCoatNormal.flow( builder, 'v3' ) : undefined;
 
 		var reflectivity = this.reflectivity ? this.reflectivity.flow( builder, 'f' ) : undefined;
 
@@ -209,6 +217,7 @@ StandardNode.prototype.build = function ( builder ) {
 
 			// add before: prevent undeclared normal
 			"	#include <normal_fragment_begin>",
+			"	#include <clearcoat_normal_fragment_begin>",
 
 			// add before: prevent undeclared material
 			"	PhysicalMaterial material;",
@@ -256,6 +265,15 @@ StandardNode.prototype.build = function ( builder ) {
 			output.push(
 				normal.code,
 				'normal = ' + normal.result + ';'
+			);
+
+		}
+
+		if ( clearCoatNormal ) {
+
+			output.push(
+				clearCoatNormal.code,
+				'clearCoatNormal = ' + clearCoatNormal.result + ';'
 			);
 
 		}
@@ -371,22 +389,29 @@ StandardNode.prototype.build = function ( builder ) {
 
 		if ( environment ) {
 
-			output.push( environment.code );
-
-			if ( clearCoatEnv ) {
-
-				output.push(
-					clearCoatEnv.code,
-					"clearCoatRadiance += " + clearCoatEnv.result + ";"
-				);
-
-			}
-
-			output.push( "radiance += " + environment.result + ";" );
+			output.push(
+				environment.code ,
+				"radiance += " + environment.result + ";"
+			);
 
 			if ( environment.extra.irradiance ) {
 
 				output.push( "irradiance += PI * " + environment.extra.irradiance + ";" );
+
+			}
+
+		}
+
+		if ( clearCoatEnv ) {
+
+			output.push(
+				clearCoatEnv.code,
+				"clearCoatRadiance += " + clearCoatEnv.result + ";"
+			);
+
+			if ( clearCoatEnv.extra.irradiance ) {
+
+				output.push( "clearCoatRadiance += PI * " + clearCoatEnv.extra.irradiance + ";" );
 
 			}
 
@@ -446,6 +471,7 @@ StandardNode.prototype.copy = function ( source ) {
 
 	if ( source.clearCoat ) this.clearCoat = source.clearCoat;
 	if ( source.clearCoatRoughness ) this.clearCoatRoughness = source.clearCoatRoughness;
+	if ( source.clearCoatNormal ) this.clearCoatNormal = source.clearCoatNormal;
 
 	if ( source.reflectivity ) this.reflectivity = source.reflectivity;
 
@@ -489,6 +515,7 @@ StandardNode.prototype.toJSON = function ( meta ) {
 
 		if ( this.clearCoat ) data.clearCoat = this.clearCoat.toJSON( meta ).uuid;
 		if ( this.clearCoatRoughness ) data.clearCoatRoughness = this.clearCoatRoughness.toJSON( meta ).uuid;
+		if ( this.clearCoatNormal ) data.clearCoatNormal = this.clearCoatNormal.toJSON( meta ).uuid;
 
 		if ( this.reflectivity ) data.reflectivity = this.reflectivity.toJSON( meta ).uuid;
 
