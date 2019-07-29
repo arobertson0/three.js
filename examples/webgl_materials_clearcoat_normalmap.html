@@ -63,7 +63,8 @@
 			node: (nodeMat, nodes) => {
 				nodeMat.clearCoatNormal = new Nodes.NormalMapNode(
 					nodes.clearCoatNormalMap,
-					nodes.clearCoatNormalScale
+					nodes.clearCoatNormalScale,
+					new Nodes.NormalNode(Nodes.NormalNode.CLEARCOAT)
 				);
 			}
 		};
@@ -295,7 +296,7 @@
 				const nodeMat = new Nodes.StandardNodeMaterial();
 
 				nodeMat.color = new Nodes.ColorNode(0x602020);
-				nodeMat.environment = new Nodes.CubeTextureNode(cubeMap, undefined, false /*nodes.bias*/);
+				nodeMat.environment = new Nodes.CubeTextureNode( cubeMap );
 
 				for (var node of notVaried) {
 					nodeMat[node] = nodes[node];
@@ -305,11 +306,12 @@
 					selector.node(nodeMat, nodes)
 				};
 
-				const mat = new THREE.MeshPhysicalMaterial({
+				const mat = new THREE.MeshPhysicalMaterial( {
+
 					color: new THREE.Color(0x602020),
 					envMap: cubeMap,
-					//visible:false,
-				});
+
+				} );
 
 				const mesh = new THREE.Mesh(geometry, mat);
 				mesh.position.copy(variation.pos.multiply(new THREE.Vector3(2.5, 2.5, 2.5)));
@@ -365,10 +367,10 @@
 
 				useNodes: true,
 				//bias: 1.0,
-				metalness: 1.0,
-				roughness: 0.0,
+				metalness: 0.0,
+				roughness: 1.0,
 				reflectivity: 0.0,
-				clearCoat: 0.0,
+				clearCoat: 1.0,
 				clearCoatRoughness: 0.0,
 				normalMap: "face",
 				normalScale: 1.0,

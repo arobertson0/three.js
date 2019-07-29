@@ -11,6 +11,8 @@ import { Node } from '../../core/Node.js';
 import { ColorNode } from '../../inputs/ColorNode.js';
 import { FloatNode } from '../../inputs/FloatNode.js';
 import { RoughnessToBlinnExponentNode } from '../../bsdfs/RoughnessToBlinnExponentNode.js';
+import { ReflectNode } from '../../accessors/ReflectNode.js';
+import { NormalNode } from '../../accessors/NormalNode.js';
 
 function StandardNode() {
 
@@ -129,6 +131,17 @@ StandardNode.prototype.build = function ( builder ) {
 			gamma: true
 		};
 
+		var contextClearCoatNormalEnvironment = 
+		{
+
+			bias: RoughnessToBlinnExponentNode,
+			gamma: true,
+			uv: new ReflectNode( undefined, new NormalNode( NormalNode.CLEARCOAT ) )
+
+		}
+
+		var contextClearCoatEnvironment = this.clearCoatNormal ? contextClearCoatNormalEnvironment : contextEnvironment;
+
 		var contextGammaOnly = {
 			gamma: true
 		};
@@ -160,7 +173,9 @@ StandardNode.prototype.build = function ( builder ) {
 		if ( this.shadow ) this.shadow.analyze( builder );
 		if ( this.emissive ) this.emissive.analyze( builder, { slot: 'emissive' } );
 
-		if ( this.environment ) this.environment.analyze( builder, { cache: 'env', context: contextEnvironment, slot: 'environment' } ); // isolate environment from others inputs ( see TextureNode, CubeTextureNode )
+		if ( this.environment ) this.environment.analyze( builder, { cache: 'env', context: contextEnvironment, slot: 'environment' } );
+		
+		if ( this.environment && this.clearCoatNormal ) this.environment.analyze( builder, { cache: 'clearCoat', context: contextClearCoatEnvironment, slot: 'environment' } ); 
 
 		// build code
 
@@ -189,7 +204,7 @@ StandardNode.prototype.build = function ( builder ) {
 
 		var environment = this.environment ? this.environment.flow( builder, 'c', { cache: 'env', context: contextEnvironment, slot: 'environment' } ) : undefined;
 
-		var clearCoatEnv = useClearCoat && environment ? this.environment.flow( builder, 'c', { cache: 'clearCoat', context: contextEnvironment, slot: 'environment' } ) : undefined;
+		var clearCoatEnv = useClearCoat && environment ? this.environment.flow( builder, 'c', { cache: 'clearCoat', context: contextClearCoatEnvironment, slot: 'environment' } ) : undefined;
 
 		builder.requires.transparent = alpha !== undefined;
 
