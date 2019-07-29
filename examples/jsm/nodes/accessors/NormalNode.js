@@ -14,6 +14,7 @@ function NormalNode( scope ) {
 }
 
 NormalNode.LOCAL = 'local';
+NormalNode.CLEARCOAT = 'clearcoat';
 NormalNode.WORLD = 'world';
 NormalNode.VIEW = 'view';
 
@@ -47,6 +48,12 @@ NormalNode.prototype.generate = function ( builder, output ) {
 			//builder.requires.normal = true;
 
 			result = 'normal';
+
+			break;
+
+		case NormalNode.CLEARCOAT:
+
+			result = 'clearCoatNormal';
 
 			break;
 
@@ -107,6 +114,12 @@ NormalNode.prototype.toJSON = function ( meta ) {
 NodeLib.addKeyword( 'normal', function () {
 
 	return new NormalNode();
+
+} );
+
+NodeLib.addKeyword( 'clearCoatNormal' , function () {
+
+	return new NormalNode(NormalNode.CLEARCOAT);
 
 } );
 
