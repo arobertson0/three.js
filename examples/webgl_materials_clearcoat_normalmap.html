@@ -36,6 +36,7 @@
 		import { OrbitControls } from './jsm/controls/OrbitControls.js';
 
 		const notVaried = [
+			'color',
 			'metalness',
 			'roughness',
 			'reflectivity',
@@ -91,32 +92,49 @@
 		const variationDescs = [];
 
 		for (let x = 0; x < 2; x++) {
+
 			for (let y = 0; y < 2; y++) {
+
 				variationDescs.push(
 					{
+
 						pos: new THREE.Vector3(x - 0.5, y - 0.5, 0),
 						selectors: [
+
 							y ? mapVariation : noVar,
 							x ? clearCoatMapVariations : noVar,
+
 						]
+
 					}
+
 				);
+
 			}
+
 		}
 
-		new THREE.FontLoader()
-			.load(
-				'fonts/gentilis_regular.typeface.json',
-				font => {
-					new THREE.CubeTextureLoader()
-						.load(
-							genCubeUrls('./textures/cube/Park2/', '.jpg'),
-							cubeMap => { initVariationScenes(variationDescs, font, cubeMap); }
-						)
-				}
-			);
+		var textureUrls = {
 
-		function initVariationScenes(variationDescs, font, cubeMap) {
+				face: "models/gltf/LeePerrySmith/Infinite-Level_02_Tangent_SmoothUV.jpg",
+				carbon: "textures/normals/CarbonFiber_normal.jpg",
+				scratch: "textures/normals/Norml_Scratches.jpg",
+				tentacle: "textures/nvidia_tentacle/tentacle_tangent_space.png",
+
+		};
+
+		new THREE.FontLoader().load(
+			'fonts/gentilis_regular.typeface.json',
+			font => new THREE.CubeTextureLoader().load(
+				genCubeUrls('./textures/cube/Park2/', '.jpg'),
+				cubeMap =>  loadTextures(
+					textureUrls,
+					textures => initVariationScenes(variationDescs, font, cubeMap, textures)
+				)
+			)
+		);
+
+		function initVariationScenes(variationDescs, font, cubeMap, textures) {
 
 			const container = document.createElement('div');
 			document.body.appendChild(container);
@@ -129,10 +147,9 @@
 
 			const { camera, renderer } = initRendering(scene, container);
 
-			const textures = loadTextures();
-
 			const nodes = {
-				//bias: new Nodes.FloatNode(1.0),
+
+				color: new Nodes.ColorNode(),
 				metalness: new Nodes.FloatNode(0.0),
 				roughness: new Nodes.FloatNode(1.0),
 				reflectivity: new Nodes.FloatNode(0.0),
@@ -142,6 +159,7 @@
 				normalScale: new Nodes.Vector2Node(1.0, 1.0),
 				clearCoatNormalMap: new Nodes.TextureNode(textures.tentacle),
 				clearCoatNormalScale: new Nodes.Vector2Node(1.0, 1.0)
+
 			};
 
 			const primitives = initVariationPrimitives(scene, variationDescs, cubeMap, nodes);
@@ -195,6 +213,7 @@
 
 				// Update legacy material variation
 				primitive.update(matModel);
+
 			}
 
 			var timer = Date.now() * 0.00025;
@@ -202,9 +221,6 @@
 			elements.particle.position.y = Math.cos(timer * 5) * 4;
 			elements.particle.position.z = Math.cos(timer * 3) * 5;
 		}
-
-
-
 
 		// 	function addLabel(name, location, fontSize) {
 
@@ -265,14 +281,6 @@
 			return { camera, renderer };
 		};
 
-		function loadTextures() {
-			var textureLoader = new THREE.TextureLoader();
-			return {
-				face: textureLoader.load("models/gltf/LeePerrySmith/Infinite-Level_02_Tangent_SmoothUV.jpg"),
-				tentacle: textureLoader.load("textures/nvidia_tentacle/tentacle_tangent_space.png"),
-			}
-		};
-
 		function genCubeUrls(path, format) {
 
 			return [
@@ -293,8 +301,7 @@
 
 
 				const nodeMat = new Nodes.StandardNodeMaterial();
-
-				nodeMat.color = new Nodes.ColorNode(0x602020);
+				nodeMat.color = nodes.color;
 				nodeMat.environment = new Nodes.CubeTextureNode( cubeMap );
 
 				for (var node of notVaried) {
@@ -305,11 +312,10 @@
 					selector.node(nodeMat, nodes)
 				};
 
+				var color = (new THREE.Color()).setHSL(0,1,0.5);
+
 				const mat = new THREE.MeshPhysicalMaterial( {
-
-					color: new THREE.Color(0x602020),
 					envMap: cubeMap,
-
 				} );
 
 				const mesh = new THREE.Mesh(geometry, mat);
@@ -363,18 +369,22 @@
 			}
 
 			const guiControls = {
-
 				useNodes: true,
-				//bias: 1.0,
+
+				hue: 0.4,
+				saturation: 0.75,
+				luminosity: 0.10,
+
 				metalness: 0.0,
-				roughness: 1.0,
-				reflectivity: 0.0,
-				clearCoat: 1.0,
+				roughness: 0.5,
+				reflectivity: 0.9,
+				clearCoat: 0.66,
 				clearCoatRoughness: 0.0,
-				normalMap: "face",
-				normalScale: 1.0,
-				clearCoatNormalMap: "tentacle",
-				clearCoatNormalScale: 1.0,
+
+				normalMap: "carbon",
+				normalScale: 2.0,
+				clearCoatNormalMap: "scratch",
+				clearCoatNormalScale: 2.0,
 			};
 
 
@@ -382,8 +392,15 @@
 			gui.add(guiControls, 'useNodes');
 			{
 
+				var colorGui = gui.addFolder('Color');
+				colorGui.add(guiControls, 'hue', 0, 1, 0.01);
+				colorGui.add(guiControls, 'saturation', 0, 1, 0.01);
+				colorGui.add(guiControls, 'luminosity', 0, 0.33, 0.01);
+				//colorGui.open();
+			}
+			{
+
 				var materialGui = gui.addFolder('Physical Material');
-				//materialGui.add(guiControls, 'bias', -10, 10, 0.1);
 				materialGui.add(guiControls, 'metalness', 0, 1, 0.01);
 				materialGui.add(guiControls, 'roughness', 0, 1, 0.01);
 				materialGui.add(guiControls, 'reflectivity', 0, 1, 0.01);
@@ -403,40 +420,98 @@
 			{
 				var normalGui = gui.addFolder('Normal Maps');
 				normalGui.add(guiControls, 'normalMap', textureNames);
-				normalGui.add(guiControls, 'normalScale', 0, 1, 0.01);
+				normalGui.add(guiControls, 'normalScale', 0, 5, 0.01);
 				normalGui.add(guiControls, 'clearCoatNormalMap', textureNames);
-				normalGui.add(guiControls, 'clearCoatNormalScale', 0, 1, 0.01);
+				normalGui.add(guiControls, 'clearCoatNormalScale', 0, 5, 0.01);
 				normalGui.open();
 			}
 
 			gui.open();
 
 			const controlTranslations = {
-				normalMap: (val) => textures[val],
-				clearCoatNormalMap: (val) => textures[val],
-				normalScale: (val) => new THREE.Vector2(val, val),
-				clearCoatNormalScale: (val) => new THREE.Vector2(val, val),
+
+				color: (ctrl) => (new THREE.Color()).setHSL( ctrl.hue, ctrl.saturation, ctrl.luminosity ),
+				normalMap: (ctrl) => textures[ctrl.normalMap],
+				clearCoatNormalMap: (ctrl) => textures[ctrl.clearCoatNormalMap],
+				normalScale: (ctrl) => new THREE.Vector2(ctrl.normalScale, ctrl.normalScale),
+				clearCoatNormalScale: (ctrl) => new THREE.Vector2(ctrl.clearCoatNormalScale, ctrl.clearCoatNormalScale),
+
 			}
 
 			return () => {
 				const matModel = {};
+
 				for (let control in guiControls) {
-					let translation = controlTranslations[control];
 					let val = guiControls[control];
-					matModel[control] = translation ? translation(val) : val;
+					matModel[control] = val;
+
+				}
+
+				for(let translation in controlTranslations){
+
+					matModel[translation] = controlTranslations[translation](guiControls);
+
 				}
 
 				return matModel;
+
 			};
 		}
 
+		// Chains callbacks to load many textures simply
+		function loadTextures(textures, onLoad){
+
+			// Transfer texture urls to an array so we can index it
+			var textureList = [];
+
+			for(var text in textureUrls){
+
+				textureList.push({ name: text, url: textureUrls[text]});
+
+			}
+
+			var loadedTex = {};
+
+			var loader = new THREE.TextureLoader();
+
+			doLoad(0);
+
+			// Uses recursive callbacks to iteratively load textures
+			function doLoad(index){
+
+				if( textureList.length === index ){
+
+					onLoad(loadedTex);
+
+				}
+				else {
+
+					var curTex = textureList[index];
+
+					loader.load(
+						curTex.url,
+						function ( texture ){
+
+							loadedTex[curTex.name] = texture;
+							doLoad(index+1);
+
+						}
+
+					)
+
+				}
+
+			}
+
+		}
 
 		function startAnim(elements, getMatModel, renderer, scene, camera) {
 
 			function anim() {
+
+				requestAnimationFrame(anim);
 				updateScene(elements, getMatModel);
 				renderer.render(scene, camera);
-				requestAnimationFrame(anim);
 			}
 			anim();
 		}
